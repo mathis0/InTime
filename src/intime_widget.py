@@ -154,7 +154,6 @@ def parse_duration(duration_str):
 
     return hours * 3600 + minutes * 60 + seconds
 
-
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
@@ -222,7 +221,6 @@ Examples:
 
     parser.add_argument('--style',
                         choices=['normal', 'lightbulb'],
-                        default='normal',
                         help='Visual style: normal (default) or lightbulb (particle-based light trails inspired by 3 Body Problem)')
 
     args = parser.parse_args()
@@ -238,9 +236,6 @@ Examples:
     # Validate position arguments
     if args.position and (args.position_x is not None or args.position_y is not None):
         parser.error("Cannot use both --position and --position-x/--position-y together")
-
-    if (args.position_x is not None and args.position_y is None) or (args.position_x is None and args.position_y is not None):
-        parser.error("Both --position-x and --position-y must be specified together")
 
     return args
 
@@ -467,19 +462,32 @@ class InTimeWidget(Gtk.Window):
 
         if position_mode == 'custom':
             # Custom position mode - use specified coordinates
-            position_x = self.config.get('position_x', 0)
-            position_y = self.config.get('position_y', 0)
+            # None means "center along this axis"
+            position_x = self.config.get('position_x', None)
+            position_y = self.config.get('position_y', None)
 
-            # For custom positioning, we still need to anchor to edges
-            # but can set margins to position the widget
-            # Full screen with margins
-            LayerShell.set_anchor(self, LayerShell.Edge.TOP, True)
-            LayerShell.set_anchor(self, LayerShell.Edge.BOTTOM, True)
-            LayerShell.set_anchor(self, LayerShell.Edge.LEFT, True)
-            LayerShell.set_anchor(self, LayerShell.Edge.RIGHT, True)
+            # Handle X axis positioning
+            if position_x is not None:
+                # Anchor to left edge with margin for X offset
+                LayerShell.set_anchor(self, LayerShell.Edge.LEFT, True)
+                LayerShell.set_anchor(self, LayerShell.Edge.RIGHT, False)
+                LayerShell.set_margin(self, LayerShell.Edge.LEFT, position_x)
+            else:
+                # Center horizontally by anchoring to both left and right
+                LayerShell.set_anchor(self, LayerShell.Edge.LEFT, True)
+                LayerShell.set_anchor(self, LayerShell.Edge.RIGHT, True)
 
-            # Set margins for custom position (this is a simplified approach)
-            # For true custom positioning, we'd need to use different anchoring
+            # Handle Y axis positioning
+            if position_y is not None:
+                # Anchor to top edge with margin for Y offset
+                LayerShell.set_anchor(self, LayerShell.Edge.TOP, True)
+                LayerShell.set_anchor(self, LayerShell.Edge.BOTTOM, False)
+                LayerShell.set_margin(self, LayerShell.Edge.TOP, position_y)
+            else:
+                # Center vertically by anchoring to both top and bottom
+                LayerShell.set_anchor(self, LayerShell.Edge.TOP, True)
+                LayerShell.set_anchor(self, LayerShell.Edge.BOTTOM, True)
+
             print(f"Custom position mode: x={position_x}, y={position_y}")
 
         else:
@@ -1317,10 +1325,12 @@ def main():
     if args.position:
         cli_overrides['position_mode'] = 'preset'
         cli_overrides['position_preset'] = args.position
-    if args.position_x is not None and args.position_y is not None:
+    if args.position_x is not None or args.position_y is not None:
         cli_overrides['position_mode'] = 'custom'
-        cli_overrides['position_x'] = args.position_x
-        cli_overrides['position_y'] = args.position_y
+        if args.position_x is not None:
+            cli_overrides['position_x'] = args.position_x
+        if args.position_y is not None:
+            cli_overrides['position_y'] = args.position_y
 
     # Create and run the application
     app = InTimeApplication(
